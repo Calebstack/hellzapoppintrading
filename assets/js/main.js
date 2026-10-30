@@ -3,7 +3,38 @@ const siteNav = document.querySelector("#primary-nav");
 const navDropdowns = document.querySelectorAll(".nav-dropdown");
 const mobileNavigation = window.matchMedia("(max-width: 880px)");
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const pageLoader = document.querySelector(".page-loader");
+const loaderShownAt = performance.now();
 let pageNavigationPending = false;
+
+function showPageLoader() {
+  if (!pageLoader) return;
+  pageLoader.classList.remove("is-hidden");
+  pageLoader.classList.add("is-active");
+  pageLoader.setAttribute("aria-hidden", "false");
+}
+
+function hidePageLoaderAfterMinimumTime() {
+  if (!pageLoader) return;
+  const minimumVisibleTime = prefersReducedMotion ? 250 : 550;
+  const remainingTime = Math.max(0, minimumVisibleTime - (performance.now() - loaderShownAt));
+
+  window.setTimeout(() => {
+    if (pageNavigationPending) return;
+    pageLoader.classList.remove("is-active");
+    pageLoader.classList.add("is-hidden");
+    pageLoader.setAttribute("aria-hidden", "true");
+  }, remainingTime);
+}
+
+if (pageLoader) {
+  pageLoader.setAttribute("aria-hidden", "false");
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", hidePageLoaderAfterMinimumTime, { once: true });
+  } else {
+    hidePageLoaderAfterMinimumTime();
+  }
+}
 
 function setMenuOpen(isOpen) {
   menuToggle.setAttribute("aria-expanded", String(isOpen));
@@ -54,7 +85,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  if (prefersReducedMotion || pageNavigationPending || event.defaultPrevented || event.button !== 0) return;
+  if (pageNavigationPending || event.defaultPrevented || event.button !== 0) return;
 
   const link = event.target.closest("a[href]");
   if (!link || link.hasAttribute("download") || link.target && link.target !== "_self") return;
@@ -66,13 +97,19 @@ document.addEventListener("click", (event) => {
 
   event.preventDefault();
   pageNavigationPending = true;
-  document.documentElement.classList.add("page-leaving");
-  window.setTimeout(() => window.location.assign(destination.href), 170);
+  showPageLoader();
+  if (!prefersReducedMotion) document.documentElement.classList.add("page-leaving");
+  window.setTimeout(() => window.location.assign(destination.href), prefersReducedMotion ? 250 : 170);
 });
 
-window.addEventListener("pageshow", () => {
+window.addEventListener("pageshow", (event) => {
   pageNavigationPending = false;
   document.documentElement.classList.remove("page-leaving");
+  if (event.persisted && pageLoader) {
+    pageLoader.classList.remove("is-active");
+    pageLoader.classList.add("is-hidden");
+    pageLoader.setAttribute("aria-hidden", "true");
+  }
 });
 
 document.querySelectorAll("[data-year]").forEach((element) => {
