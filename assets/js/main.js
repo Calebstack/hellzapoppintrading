@@ -1,15 +1,24 @@
 const menuToggle = document.querySelector(".menu-toggle");
 const siteNav = document.querySelector("#primary-nav");
 const navDropdowns = document.querySelectorAll(".nav-dropdown");
+const mobileNavigation = window.matchMedia("(max-width: 880px)");
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let pageNavigationPending = false;
 
 function setMenuOpen(isOpen) {
   menuToggle.setAttribute("aria-expanded", String(isOpen));
   menuToggle.setAttribute("aria-label", isOpen ? "Close navigation" : "Open navigation");
   siteNav.classList.toggle("is-open", isOpen);
+  siteNav.inert = mobileNavigation.matches && !isOpen;
   document.body.classList.toggle("menu-open", isOpen);
 
   if (!isOpen) navDropdowns.forEach((dropdown) => { dropdown.open = false; });
 }
+
+siteNav.inert = mobileNavigation.matches && menuToggle.getAttribute("aria-expanded") !== "true";
+mobileNavigation.addEventListener("change", (event) => {
+  siteNav.inert = event.matches && menuToggle.getAttribute("aria-expanded") !== "true";
+});
 
 menuToggle.addEventListener("click", () => {
   setMenuOpen(menuToggle.getAttribute("aria-expanded") !== "true");
@@ -42,6 +51,28 @@ document.addEventListener("keydown", (event) => {
       menuToggle.focus();
     }
   }
+});
+
+document.addEventListener("click", (event) => {
+  if (prefersReducedMotion || pageNavigationPending || event.defaultPrevented || event.button !== 0) return;
+
+  const link = event.target.closest("a[href]");
+  if (!link || link.hasAttribute("download") || link.target && link.target !== "_self") return;
+
+  const destination = new URL(link.href, window.location.href);
+  const current = new URL(window.location.href);
+  if (destination.origin !== current.origin || destination.protocol !== current.protocol) return;
+  if (destination.pathname === current.pathname && destination.search === current.search) return;
+
+  event.preventDefault();
+  pageNavigationPending = true;
+  document.documentElement.classList.add("page-leaving");
+  window.setTimeout(() => window.location.assign(destination.href), 170);
+});
+
+window.addEventListener("pageshow", () => {
+  pageNavigationPending = false;
+  document.documentElement.classList.remove("page-leaving");
 });
 
 document.querySelectorAll("[data-year]").forEach((element) => {
@@ -180,9 +211,8 @@ if (quoteForm) {
 }
 
 const revealElements = document.querySelectorAll(".reveal");
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-if ("IntersectionObserver" in window && !reducedMotion) {
+if ("IntersectionObserver" in window && !prefersReducedMotion) {
   const revealObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach((entry) => {
       if (!entry.isIntersecting) return;
